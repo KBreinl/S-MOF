@@ -1,0 +1,11 @@
+# -----------------------
+# Copyright (c) 2017, Korbinian Breinl
+# All rights reserved.
+#
+# Model parameter file S-MOF
+# -----------------------
+
+wind    :   30
+nn       :   7
+historical  : off
+
