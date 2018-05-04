@@ -1,5 +1,6 @@
 
 clear
+close all
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Read in and prepare all data
@@ -13,9 +14,6 @@ disp('Read in and prepare all data...')
 % Read in hourly data
 [rain_date_H, rain_H, rain_NOS_H] = read_file('Hourly_rain.csv');
 [temp_date_H, temp_H, temp_NOS_H] = read_file('Hourly_temp.csv');
-
-% Date and matrices for the simulation (according to observations)
-rain_date_D=datenum(rain_date_D);
 
 % Reads in assignments between daily and hourly sites
 links_rain=csvread('links_rain.csv');
@@ -35,10 +33,10 @@ historical=read_param('historical');
 rain_D_agg=rain_D;
 for i=1:rain_NOS_D;
     k=find(rain_D_agg(:,i)>0);
-    rain_D_agg(k,i)=zscore(rain_D_agg(k,i));
+    rain_D_agg(k,i)=sqrt(rain_D_agg(k,i));
 end
 
-temp_D_agg=zscore(temp_D);
+temp_D_agg=(temp_D);
 
 % Preallocate matrix for disaggregated simulations (w/o first and last 24h)
 rain_H_sim=zeros(24,rain_NOS_D,length(rain_D)-2);
@@ -47,15 +45,6 @@ temp_H_sim=zeros(24,temp_NOS_D,length(temp_D)-2);
 % Convert the hours to daily IDs
 rain_date_H=datenum(year(rain_date_H),month(rain_date_H),day(rain_date_H));
 temp_date_H=datenum(year(temp_date_H),month(temp_date_H),day(temp_date_H));
-
-% Shift by one hour
-rain_date_H=circshift(rain_date_H,1);
-temp_date_H=circshift(temp_date_H,1);
-
-rain_date_H(1)=[];
-temp_date_H(1)=[];
-rain_H(1,:)=[];
-temp_H(1,:)=[];
 
 % Preallocate matrix for nearest neighbor sampling
 distance_matrix_NN=zeros(neighbor,3);
@@ -116,10 +105,8 @@ end;
 % Standardize data for distance calculation
 for i=1:rain_NOS_D;
     k=find(rain_H_agg(:,i)>0);
-    rain_H_agg(k,i)=zscore(rain_H_agg(k,i));
+    rain_H_agg(k,i)=sqrt(rain_H_agg(k,i));
 end
-
-temp_H_agg=zscore(temp_H_agg);
 
 % Convert day in day of the year (doy) for disaggregation
 v0 = datevec(rain_date_D_agg);
@@ -135,14 +122,9 @@ disp('Disaggregate the daily time series...')
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Loop through all simulated days and ignore first and last (no day
 % before/after available)
-
-h = waitbar(0,'Disaggregating daily data...');
 steps=length(rain_date_D_agg)-1;
 
 for i=2:length(rain_date_D_agg)-1;
-    
-    waitbar(i/steps)
-    
     % Define days for disaggregation within a window
     wind_da=rain_date_D_agg(i)-(wind+1):rain_date_D_agg(i)+(wind+1);
     v1=datevec(wind_da);
@@ -152,8 +134,10 @@ for i=2:length(rain_date_D_agg)-1;
     % Define day to disaggregate (with previous and following day and only
     % sites with rainfall (for comparison based on distances)
     rain_D_comp=rain_D_agg(i-1:i+1,:);
-    temp_D_comp=temp_D_agg(i,:);
+    temp_D_comp=temp_D_agg(i-1:i+1,:);
     
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Keep day to disaggregate non-standardized (for actual disaggregation)
     rain_D_disagg=rain_D(i-1:i+1,:);
     temp_D_disagg=temp_D(i,:);
@@ -175,6 +159,31 @@ for i=2:length(rain_date_D_agg)-1;
     % rainfall matrix of neighbors to compare with
     z=rain_H_agg(k,:);
     
+    % Reduce number of neighbors if the default cannot be fullfilled
+    if isequal(historical, 'off')
+        compl_test=(z(2:end-1,id_wet)>0)+0;
+        if length(id_wet)>1
+            compl_test=(sum((compl_test~=0)'))';
+        end
+        compl_test(:,2)=rain_date_D_window;
+    elseif isequal(historical, 'on')
+        compl_test=(z(2:end-1,id_wet)>0)+0;
+        if length(id_wet)>1
+            compl_test=(sum((compl_test~=0)'))';
+        end
+        compl_test(:,2)=year(rain_date_D_window);
+        compl_test(compl_test(:,2)==year(rain_date_D(i)),1)=0;
+        compl_test(:,2)=rain_date_D_window;
+    end
+    
+    if sum(compl_test(:,1)==size(id_wet,2))<neighbor
+        % Define correction of number if nearest neighbord (nn_c)
+        nn_c=neighbor-sum(compl_test(:,1)==size(id_wet,2));
+        disp(nn_c)
+    else
+        nn_c=0;
+    end
+    
     % Preallocate
     rain_H_agg_comp=zeros(length(z)-2,length(id_wet));
     
@@ -191,7 +200,9 @@ for i=2:length(rain_date_D_agg)-1;
     temp_H_agg_comp=zeros(length(z)-2,temp_NOS_D);
     
     for ii=2:length(z)-1;
-        temp_H_agg_comp(ii-1,:)=z(ii,:);
+        temp_H_agg_comp(ii-1,:,1)=z(ii-1,:);
+        temp_H_agg_comp(ii-1,:,1)=z(ii,:);
+        temp_H_agg_comp(ii-1,:,3)=z(ii+1,:);
     end
     
     % Check if more than one station has rainfall or not
@@ -203,58 +214,68 @@ for i=2:length(rain_date_D_agg)-1;
     
     % Preallocate first distance matrix
     distance_matrix_1=zeros(length(z)-2,2)+9999;
+    distance_matrix_1t=zeros(length(z)-2,2)+9999;
     
     % Add rainfall distances and type of distance measure
     dist='cityblock';
     
+    % Distances for rainfall
     if isempty(id_wet)==0
         % Compare distances in regard to actual rain and temp day plus
         % precedent and consecutive rain day
-        distance_matrix_1(b,1)=pdist2([rain_H_agg_comp(b,:,1),rain_H_agg_comp(b,:,2),rain_H_agg_comp(b,:,3),temp_H_agg_comp(b,:)],[rain_D_comp(1,:),rain_D_comp(2,:),rain_D_comp(3,:),temp_D_comp],dist);
-    else
-        % Add temperature distances if day is completely dry
-        distance_matrix_1(:,1) = pdist2(temp_H_agg_comp,temp_D_comp,dist);
+        distance_matrix_1(b,1)=pdist2([rain_H_agg_comp(b,:,1),rain_H_agg_comp(b,:,2),rain_H_agg_comp(b,:,3)],[rain_D_comp(1,:),rain_D_comp(2,:),rain_D_comp(3,:)],dist);
     end
+    
+    % Distances for temperature
+    distance_matrix_1t(:,1) = pdist2([temp_H_agg_comp(:,:,1),temp_H_agg_comp(:,:,2),temp_H_agg_comp(:,:,3)],[temp_D_comp(1,:),temp_D_comp(2,:),temp_D_comp(3,:)],dist);
     
     % Add corresponding day to distance matrix
     distance_matrix_1(:,2)=rain_date_D_window;
+    distance_matrix_1t(:,2)=rain_date_D_window;
     
-    if isempty(id_wet)==0
-        % Filter out day with rainfall
-        distance_matrix_2=distance_matrix_1(distance_matrix_1(:,1)~=9999,:);
-        % Sort rows in distances according to minimum distance
-        distance_matrix_2=sortrows(distance_matrix_2,1);
-    elseif isempty(id_wet)==1
-        distance_matrix_2=distance_matrix_1;
-        distance_matrix_2=sortrows(distance_matrix_2,1);
-    end
+    distance_matrix_2t=distance_matrix_1t;
+    distance_matrix_2t=sortrows(distance_matrix_2t,1);
     
     % Take out same year if resampling of historical values to avoid
     % recreation of observations
-    if isequal(historical, 'on')
-        distance_matrix_2=distance_matrix_2(year(distance_matrix_2(:,2))~=year(rain_date_D_agg(i)),:);
-    end;
-    
-    % Nearest neighbor (NN) algorithm sampling
-    distance_matrix_NN(:,1:2)=distance_matrix_2(1:neighbor,:);
-    distance_matrix_NN(distance_matrix_NN(:,1)==0,1)=0.000001;
-    distance_matrix_NN(:,3)=cumsum((1:length(distance_matrix_NN(:,1)))'./distance_matrix_NN(:,1)/sum((1:neighbor)'./distance_matrix_NN(:,1)));
-    ran=rand;
-    [~,I] = min(abs(distance_matrix_NN(:,3)-ran));
-    k=find(rain_date_H==distance_matrix_NN(I,2));
-    
-    % Disaggregate the rain
-    rain_disagg=bsxfun(@times,rain_D_disagg(2,:),bsxfun(@rdivide,rain_H(k,id_wet),sum(rain_H(k,id_wet))));
-    % Disaggregate the temperature
-    temp_disagg=bsxfun(@plus,temp_D_disagg,bsxfun(@minus,temp_H(k,:),mean(temp_H(k,:))));
-    
     if isempty(id_wet)==0
+        distance_matrix_2=distance_matrix_1(distance_matrix_1(:,1)~=9999,:);
+        distance_matrix_2=sortrows(distance_matrix_2,1);
+        
+        if isequal(historical, 'on')
+            distance_matrix_2=distance_matrix_2(year(distance_matrix_2(:,2))~=year(rain_date_D_agg(i)),:);
+        end
+        
+        % Nearest neighbor (NN) algorithm sampling
+        distance_matrix_NN=zeros(neighbor-nn_c,2);
+        distance_matrix_NN(:,1:2)=distance_matrix_2(1:neighbor-nn_c,:);
+        distance_matrix_NN(distance_matrix_NN(:,1)==0,1)=0.000001;
+        distance_matrix_NN(:,3)=cumsum((1:length(distance_matrix_NN(:,1)))'./distance_matrix_NN(:,1)/sum((1:neighbor-nn_c)'./distance_matrix_NN(:,1)));
+        ran=rand;
+        [~,I] = min(abs(distance_matrix_NN(:,3)-ran));
+        k=find(rain_date_H==distance_matrix_NN(I,2));
+        rain_H_disagg=rain_H(k,:);
+        
+        % Disaggregate the rain
+        rain_disagg=bsxfun(@times,rain_D_disagg(2,:),bsxfun(@rdivide,rain_H_disagg(:,id_wet),sum(rain_H_disagg(:,id_wet))));
         rain_H_sim(:,id_wet,i-1)=rain_disagg;
     end
     
-    temp_H_sim(:,:,i-1)=temp_disagg;
+    if isequal(historical, 'on')
+        distance_matrix_2t=distance_matrix_2t(year(distance_matrix_2t(:,2))~=year(rain_date_D_agg(i)),:);
+    end
     
-end
+    distance_matrix_NNt(:,1:2)=distance_matrix_2t(1:neighbor,:);
+    distance_matrix_NNt(distance_matrix_NNt(:,1)==0,1)=0.000001;
+    distance_matrix_NNt(:,3)=cumsum((1:length(distance_matrix_NNt(:,1)))'./distance_matrix_NNt(:,1)/sum((1:neighbor)'./distance_matrix_NNt(:,1)));
+    ran=rand;
+    [~,I] = min(abs(distance_matrix_NNt(:,3)-ran));
+    k=find(temp_date_H==distance_matrix_NNt(I,2));
+    
+    % Disaggregate the temperature
+    temp_disagg=bsxfun(@plus,temp_D_disagg,bsxfun(@minus,temp_H(k,:),mean(temp_H(k,:))));
+    temp_H_sim(:,:,i-1)=temp_disagg;
+end;
 
 % Convert array of simulation into matrix
 rain_H_sim=reshape(permute(rain_H_sim,[1,3,2]),[],rain_NOS_D);
@@ -269,16 +290,83 @@ rain_D=rain_D(1:end-1,:);
 temp_D(1,:)=[];
 temp_D=temp_D(1:end-1,:);
 
+% Smooth the temperature between the 24 hour blocks
+for i=1:size(temp_H_sim,2);
+    t=24;
+    for ii=1:length(temp_H_sim)/24-2
+        temp_H_sim(t-2:t+2,i)=smooth(temp_H_sim(t-2:t+2,i));
+        t=t+24;
+    end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Correct time series 
+disp('Reducing additional wet hours (correction routine)...')
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Cut off too many rainfall values below length of observations and
+% redistribute cut off rain first over values below threshold and the over
+% all
+for i=1:size(rain_H_sim,2)
+    
+    k_obs=find(rain_H(:,i)>0);
+    obs=rain_H(rain_H(:,i)>0,i);
+    k_sim=find(rain_H_sim(:,i)>0);
+    sim=rain_H_sim(rain_H_sim(:,i)>0,i);
+    
+    dif=length(sim)-length(obs);
+    
+    if dif>0;
+        k_sim(:,2)=rain_H_sim(rain_H_sim(:,i)>0,i);
+        k_sim=sortrows(k_sim,2);
+        
+        data=(1:length(rain_H_sim))';
+        data(ismember(data(:,1),k_sim(1:dif,1)),2)=data(ismember(data(:,1),k_sim(1:dif,1)),1);
+        
+        idx=ismember(rain_date_H,rain_date_H(k_sim(1:dif,1)));
+        data2=rain_date_H(ismember(rain_date_H,unique(rain_date_H(idx))));
+        data2(:,2)=data(idx,1);
+        data2(:,3)=data(idx,2);
+        data2(:,4)=rain_H_sim(idx,i);
+        
+        % Redistribute cut off rainfall to other amounts (more emphasis on
+        % small values)
+        rain_cut=sum(data2(data2(:,3)~=0,4));
+        k=find(data2(:,3)==0 & data2(:,4)>0);
+        data3=data2(k,4);
+        
+        % Put more emphasis on the small values
+        data3=abs(data3-max(data3));
+        
+        %Redistribute
+        data2(k,4)=data2(k,4)+data3/sum(data3)*rain_cut;
+        rain_H_sim(k_sim(1:dif,1),i)=0;
+        rain_H_sim(data2(k,2),i)=data2(k,4);
+        
+    end
+end
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Disaggregate the daily time series
-disp('Write out disaggregated data')
+disp('Write out disaggregated data...')
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% t = (datetime(year(rain_date_D(2)),month(rain_date_D(2)),day(rain_date_D(2)),0,0,0):...
-%     hours:datetime(year(rain_date_D(end)),month(rain_date_D(end)),day(rain_date_D(end)),0,0,0))';
-% 
-% writetable(table(t(1:end-1),rain_H_sim), 'Hourly_rain_sim.csv', 'WriteVariableNames', false);
-% writetable(table(t(1:end-1),sim_temp_h), 'Hourly_temp_sim.csv', 'WriteVariableNames', false);
+[rain_date_H, rain_H, rain_NOS_H] = read_file('Hourly_rain.csv');
+[temp_date_H, temp_H, temp_NOS_H] = read_file('Hourly_temp.csv');
 
-clearvars -except rain_D temp_D rain_H_sim temp_H_sim 
+rain_date_H(1:24,:)=[];
+rain_date_H((length(rain_date_H)-23):end,:)=[];
 
+temp_date_H(1:24,:)=[];
+temp_date_H((length(temp_date_H)-23):end,:)=[];
+
+rain_H(1:24,:)=[];
+rain_H((length(rain_H)-23):end,:)=[];
+
+temp_H(1:24,:)=[];
+temp_H((length(temp_H)-23):end,:)=[];
+
+fclose('all');
+
+disp('Simulation finished...')
+
+clearvars -except rain_H_sim temp_H_sim rain_H temp_H 
