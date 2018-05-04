@@ -179,7 +179,7 @@ for i=2:length(rain_date_D_agg)-1;
     if sum(compl_test(:,1)==size(id_wet,2))<neighbor
         % Define correction of number if nearest neighbord (nn_c)
         nn_c=neighbor-sum(compl_test(:,1)==size(id_wet,2));
-        disp(nn_c)
+        % disp(nn_c)
     else
         nn_c=0;
     end
