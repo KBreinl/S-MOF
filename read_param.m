@@ -15,7 +15,7 @@ tmp = C{2}(strcmp(C{1}, paramName));
 out = cell2mat(tmp);
 
 % if the parameter is 'dist' or 'cl_period', return a string instead
-if ~any(strncmp(paramName, {'dist', 'cl_period', 'corr_rand', 'para_rainf','historical'}, 4))
+if ~any(strncmp(paramName, {'dist', 'cl_period', 'corr_rand', 'para_rainf','historical','int_rain','int_temp'}, 4))
     out = str2double(out);
 end
 
