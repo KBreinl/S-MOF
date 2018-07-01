@@ -7,5 +7,6 @@
 
 wind    :   30
 nn       :   7
-historical  : off
-
+historical  : on
+int_rain: adv
+int_temp: adv
