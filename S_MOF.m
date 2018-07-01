@@ -15,19 +15,87 @@ disp('Read in and prepare all data...')
 [rain_date_H, rain_H, rain_NOS_H] = read_file('Hourly_rain.csv');
 [temp_date_H, temp_H, temp_NOS_H] = read_file('Hourly_temp.csv');
 
-% Reads in assignments between daily and hourly sites
-links_rain=csvread('links_rain.csv');
-links_temp=csvread('links_temp.csv');
-
-% Extend the number of hourly sites to the number of daily sites
-rain_H=rain_H(:,links_rain(:,2));
-temp_H=temp_H(:,links_temp(:,2));
+% Read coordinates of sites
+rain_D_LL=csvread('Daily_rain_LL.csv');
+temp_D_LL=csvread('Daily_temp_LL.csv');
+rain_H_LL=csvread('Hourly_rain_LL.csv');
+temp_H_LL=csvread('Hourly_temp_LL.csv');
 
 % Read in measuring interval for hourly rainfall and temperature
 wind = read_param('wind');
 wind = wind+1;
 neighbor = read_param('nn');
 historical=read_param('historical');
+int_rain=read_param('int_rain');
+int_temp=read_param('int_temp');
+
+% Check and conduct interpolation (rainfall)
+if size(rain_D_LL,1)~=size(rain_H_LL,1)
+    dist_rain=zeros(rain_NOS_D,rain_NOS_H);
+    dist_calc=zeros(rain_NOS_D,rain_NOS_H);
+    for i=1:length(rain_D_LL)
+        for ii=1:length(rain_H_LL)
+            dist_calc(i,ii)=haversine(rain_D_LL(i,:),rain_H_LL(ii,:));
+        end
+        [sortedX, sortedInds] = sort(dist_calc(i,:),'ascend');
+        dist_rain(i,:)=sortedInds;
+        dist_calc(i,:)=sortedX;
+    end
+    
+    % Chose closest sites (simple) or apply advanced interpolation
+    if isequal(int_rain, 'simple')
+        rain_H=rain_H(:,dist_rain(:,1));
+        rain_NOS_H=rain_NOS_D;
+    else
+        rain_H=rain_H(:,dist_rain(:,1));
+        rain_NOS_H=rain_NOS_D;
+        id_rec=1:rain_NOS_D;
+        id_rec=id_rec(dist_calc(:,1)~=0);
+        rain_H(:,id_rec)=0;
+        
+        id_empty=1:rain_NOS_D;
+        id_empty=id_empty(dist_calc(:,1)==0);
+        for i=1:rain_NOS_D
+            dist_rain(i,:)=id_empty(dist_rain(i,:));
+        end
+        
+        rain_H=interpolation_rain(rain_H,rain_D,rain_date_D,rain_date_H,id_rec,dist_rain,dist_calc);
+    end
+end
+
+% Check and conduct interpolation (temperature)
+if size(temp_D_LL,1)~=size(temp_H_LL,1)
+    dist_temp=zeros(temp_NOS_D,temp_NOS_H);
+    dist_calc=zeros(temp_NOS_D,temp_NOS_H);
+    for i=1:length(temp_D_LL)
+        for ii=1:length(temp_H_LL)
+            dist_calc(i,ii)=haversine(temp_D_LL(i,:),temp_H_LL(ii,:));
+        end
+        [sortedX, sortedInds] = sort(dist_calc(i,:),'ascend');
+        dist_temp(i,:)=sortedInds;
+        dist_calc(i,:)=sortedX;
+    end
+    
+    % Chose closest sites (simple) or apply advanced interpolation
+    if isequal(int_temp, 'simple')
+        temp_H=temp_H(:,dist_rain(:,1));
+        temp_NOS_H=temp_NOS_D;
+    else
+        temp_H=temp_H(:,dist_temp(:,1));
+        temp_NOS_H=temp_NOS_D;
+        id_rec=1:temp_NOS_D;
+        id_rec=id_rec(dist_calc(:,1)~=0);
+        temp_H(:,id_rec)=0;
+        
+        id_empty=1:temp_NOS_D;
+        id_empty=id_empty(dist_calc(:,1)==0);
+        for i=1:temp_NOS_D
+            dist_temp(i,:)=id_empty(dist_temp(i,:));
+        end
+        
+        temp_H=interpolation_temp(temp_H,temp_D,temp_date_D,temp_date_H,id_rec,dist_temp,dist_calc);
+    end
+end
 
 % Standardize daily data for distance calculation
 rain_D_agg=rain_D;
@@ -201,7 +269,7 @@ for i=2:length(rain_date_D_agg)-1;
     
     for ii=2:length(z)-1;
         temp_H_agg_comp(ii-1,:,1)=z(ii-1,:);
-        temp_H_agg_comp(ii-1,:,1)=z(ii,:);
+        temp_H_agg_comp(ii-1,:,2)=z(ii,:);
         temp_H_agg_comp(ii-1,:,3)=z(ii+1,:);
     end
     
