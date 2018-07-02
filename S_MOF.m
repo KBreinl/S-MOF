@@ -31,6 +31,7 @@ int_temp=read_param('int_temp');
 
 % Check and conduct interpolation (rainfall)
 if size(rain_D_LL,1)~=size(rain_H_LL,1)
+disp('Interpolation of rainfall...')
     dist_rain=zeros(rain_NOS_D,rain_NOS_H);
     dist_calc=zeros(rain_NOS_D,rain_NOS_H);
     for i=1:length(rain_D_LL)
@@ -65,6 +66,7 @@ end
 
 % Check and conduct interpolation (temperature)
 if size(temp_D_LL,1)~=size(temp_H_LL,1)
+disp('Interpolation of temperature...')
     dist_temp=zeros(temp_NOS_D,temp_NOS_H);
     dist_calc=zeros(temp_NOS_D,temp_NOS_H);
     for i=1:length(temp_D_LL)
