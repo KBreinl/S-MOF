@@ -2,7 +2,6 @@ function [interp_temp] = interpolation_temp(interp_temp,temp_D,temp_date_D,temp_
 
 % Loops through sites without hourly recording
 for i=1:length(id_rec)
-    disp(i)
     for ii=1:length(temp_date_D);
           k=find(temp_date_H==temp_date_D(ii));
             % Build matrix with closest sites, rainfall amount and distance
