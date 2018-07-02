@@ -35,7 +35,7 @@ disp('Interpolation of rainfall...')
     dist_rain=zeros(rain_NOS_D,rain_NOS_H);
     dist_calc=zeros(rain_NOS_D,rain_NOS_H);
     for i=1:length(rain_D_LL)
-        for ii=1:length(rain_H_LL)
+        for ii=1:size(rain_H_LL,1)
             dist_calc(i,ii)=haversine(rain_D_LL(i,:),rain_H_LL(ii,:));
         end
         [sortedX, sortedInds] = sort(dist_calc(i,:),'ascend');
