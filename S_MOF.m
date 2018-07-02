@@ -70,7 +70,7 @@ disp('Interpolation of temperature...')
     dist_temp=zeros(temp_NOS_D,temp_NOS_H);
     dist_calc=zeros(temp_NOS_D,temp_NOS_H);
     for i=1:length(temp_D_LL)
-        for ii=1:length(temp_H_LL)
+        for ii=1:size(temp_H_LL,1)
             dist_calc(i,ii)=haversine(temp_D_LL(i,:),temp_H_LL(ii,:));
         end
         [sortedX, sortedInds] = sort(dist_calc(i,:),'ascend');
