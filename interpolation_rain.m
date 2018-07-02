@@ -41,10 +41,23 @@ for i=1:length(id_rec)
                 interp_rain(k,id_rec(i))=hyeto*rain_D(ii,id_rec(i));
                 
             else
-                interp_rain(k,id_rec(i))=rain_D(ii,id_rec(i))/24;
+                % If there are not three stations with rainfall,take any
+                % suitable day from the nearest site
+                id2=rain_D(:,dist_rain(id_rec(i),1));
+                id2(:,2)=datenum(rain_date_D);
+                id2=sortrows(id2,1);
+                id2(id2(:,1)==0,:)=[];
+                id2(:,3)=cumsum((1:length(id2(:,1)))'./id2(:,1)/sum((1:length(id2))'./id2(:,1)));
+                ran=rand;
+                [~,idx] = min(abs(id2(:,3)-ran));
+                idx=id2(idx,2);
+                
+                hyeto=interp_rain(datenum(rain_date_H)==idx,dist_rain(id_rec(i),1));
+                hyeto=hyeto./sum(hyeto);
+
+                interp_rain(k,id_rec(i))=hyeto*rain_D(ii,id_rec(i));
             end
         end
     end
 end
-
 
