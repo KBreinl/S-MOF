@@ -2,7 +2,6 @@ function [interp_rain] = interpolation_rain(interp_rain,rain_D,rain_date_D,rain_
 
 % Loops through sites without hourly recording
 for i=1:length(id_rec)
-    disp(i)
     for ii=1:length(rain_date_D);
         if rain_D(ii,id_rec(i))>0
             k=find(rain_date_H==rain_date_D(ii));
