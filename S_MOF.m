@@ -80,7 +80,7 @@ disp('Interpolation of temperature...')
     
     % Chose closest sites (simple) or apply advanced interpolation
     if isequal(int_temp, 'simple')
-        temp_H=temp_H(:,dist_rain(:,1));
+        temp_H=temp_H(:,dist_temp(:,1));
         temp_NOS_H=temp_NOS_D;
     else
         temp_H=temp_H(:,dist_temp(:,1));
