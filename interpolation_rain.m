@@ -42,7 +42,6 @@ for i=1:length(id_rec)
                 interp_rain(k,id_rec(i))=hyeto*rain_D(ii,id_rec(i));
                 
             else
-                disp('achtung')
                 interp_rain(k,id_rec(i))=rain_D(ii,id_rec(i))/24;
             end
         end
